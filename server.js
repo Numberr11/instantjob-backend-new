@@ -51,7 +51,7 @@ app.use(passport.session());
 
 // Allow only specific origin (your Vercel frontend)
 const corsOptions = {
-  origin: ['https://instantjob-frontend-nuiz.vercel.app', 'http://localhost:3000'],
+  origin: ['https://instantjob-frontend-nuiz.vercel.app', 'https://instantjob-frontend-kappa.vercel.app', 'http://localhost:3000'],
   methods: 'GET, POST, PUT, DELETE , PATCH',
   allowedHeaders: 'Content-Type, Authorization',
 };

@@ -70,7 +70,7 @@ router.post("/login", async (req, res) => {
 router.get("/get-all", async (req,res) => {
   try {
 
-    const recruiters = await Recruiter.find({status: 'active'}).select('-password -role')
+    const recruiters = await Recruiter.find().select('-password -role')
     res.status(200).json({
       message: "Recruiters fetched successfully",
       recruiters
@@ -136,18 +136,22 @@ router.put('/update/:id', async (req, res) => {
 router.delete('/delete/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const { status } = req.body; // Expect status in request body
 
-    // Find and update recruiter status to inactive
+    if (!['active', 'inactive'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status value' });
+    }
+
     const recruiter = await Recruiter.findByIdAndUpdate(
       id,
-      { status: "inactive" },
+      { status },
       { new: true }
     );
     if (!recruiter) {
       return res.status(404).json({ message: 'Recruiter not found' });
     }
 
-    res.status(200).json({ message: 'Recruiter marked as inactive successfully' });
+    res.status(200).json({ message: `Recruiter status updated to ${status} successfully` });
   } catch (err) {
     console.error('Update recruiter status error:', err);
     res.status(500).json({ message: 'Failed to update recruiter status', error: err.message });
