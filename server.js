@@ -25,6 +25,9 @@ const contactRoutes = require('./routes/contactRoutes')
 const applyJobByCareers = require('./routes/applyJobByCareersRoutes')
 const resumeDownloads = require('./routes/downloadRoutes')
 
+// blogs
+const blogRoutes = require("./routes/blogRoutes")
+
 
 
 dotenv.config();
@@ -78,6 +81,7 @@ app.use("/api",uploadBulkCanidate)
 app.use('/api',contactRoutes)
 app.use('/api',applyJobByCareers)
 app.use('/api', resumeDownloads)
+app.use('/api/blog',blogRoutes)
 
 // app.use('/api', pageRoutes);
 
