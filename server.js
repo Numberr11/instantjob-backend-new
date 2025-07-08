@@ -18,6 +18,7 @@ const employerPlanRoutes = require('./routes/employerPlanRoutes')
 
 const recruiterAuth = require("./routes/recruiterAuth");
 const recruiterCandidate = require("./routes/recruiterCandidate");
+const recruiterCRM = require("./routes/recruiterCRM");
 // const pageRoutes = require('./routes/PageRoutes');
 const uploadBulkCanidate = require('./routes/bulkCandidateRoutes')
 
@@ -76,6 +77,7 @@ app.use('/api/employer-purchase',employerPlanRoutes)
 
 app.use("/api/recruiter", recruiterAuth);
 app.use("/api/recruiter/candidates", recruiterCandidate);
+app.use("/api/CRM", recruiterCRM);
 app.use("/api",uploadBulkCanidate)
 
 app.use('/api',contactRoutes)
