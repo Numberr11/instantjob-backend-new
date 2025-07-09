@@ -223,7 +223,7 @@ router.get('/in-active/all-candidate', async (req, res) => {
 router.get('/get/:id', async (req, res) => {
     try {
       const candidate = await Candidate.findById(req.params.id)
-      .select('-role -password')
+      .select('-password')
       if (!candidate) {
         return res.status(404).json({ message: 'Candidate not found' });
       }

@@ -10,7 +10,8 @@ exports.registerValidation = (data) => {
     email: Joi.string().email(),
     phone: Joi.string().pattern(/^[0-9]{10}$/),
     password: Joi.string().min(6).required(),
-    role: Joi.string().valid('admin', 'candidate').default('candidate'),
+    role: Joi.string().valid('admin', 'candidate','s-admin').default('candidate'),
+    status : Joi.string().valid('Active', 'In-Active').default('Active').optional(),
   }).or('email', 'phone'); // At least one is required
 
   return schema.validate(data);

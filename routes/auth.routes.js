@@ -1,16 +1,31 @@
-const express = require('express');
+const express = require("express");
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
 const router = express.Router();
-require('dotenv').config();
+require("dotenv").config();
 
-const { register, login, logout, updatePassword, addBulkCandidate, forgotPassword, resetPassword } = require('../controllers/auth.controller');
+const {
+  register,
+  login,
+  logout,
+  updatePassword,
+  addBulkCandidate,
+  forgotPassword,
+  resetPassword,
+  getSubAdmin,
+  deleteSubAdmin,
+  updateSubAdmin,
+} = require("../controllers/auth.controller");
 
-router.post('/register', register);
-router.post('/login', login);
-router.post('/logout', logout);
-router.put('/update-pass/:candidateId', updatePassword)
-router.post('/add-bulk-candidate',addBulkCandidate)
+router.get("/:adminId/subadmins", getSubAdmin);
+router.patch("/subadmin/:id", updateSubAdmin);
+router.delete("/:adminId/subadmins/:id", deleteSubAdmin);
+
+router.post("/register", register);
+router.post("/login", login);
+router.post("/logout", logout);
+router.put("/update-pass/:candidateId", updatePassword);
+router.post("/add-bulk-candidate", addBulkCandidate);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 
@@ -38,8 +53,5 @@ router.get(
     );
   }
 );
-
-
-
 
 module.exports = router;

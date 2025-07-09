@@ -1,22 +1,215 @@
-const User = require('../models/candidate.model');
-const bcrypt = require('bcryptjs');
+const User = require("../models/candidate.model");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-const generateToken = require('../utils/generateToken');
-const Joi = require('joi');
-const { registerValidation, loginValidation } = require('../validations/auth.validation');
-const sendEmail = require('../utils/sendEmail');
+const generateToken = require("../utils/generateToken");
+const Joi = require("joi");
+const {
+  registerValidation,
+  loginValidation,
+} = require("../validations/auth.validation");
+const sendEmail = require("../utils/sendEmail");
+const { default: mongoose } = require("mongoose");
+
+
+exports.getSubAdmin = async (req, res) => {
+  try {
+    const { adminId } = req.params;
+
+    // Validate adminId
+    if (!adminId || !mongoose.Types.ObjectId.isValid(adminId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid admin ID",
+      });
+    }
+
+    // Check if requester is an admin
+    const admin = await User.findById(adminId).select("role");
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: "Admin not found",
+      });
+    }
+
+    if (admin.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only admins can access subadmin data",
+      });
+    }
+
+    // Find all subadmins (not just one)
+    const subAdmins = await User.find({ role: "s-admin" }).select(
+      "-password -__v"
+    ); // Exclude sensitive fields
+
+    if (!subAdmins.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No subadmins available",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      count: subAdmins.length,
+      data: subAdmins,
+    });
+  } catch (error) {
+    console.error("Error fetching subadmins:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching subadmins",
+    });
+  }
+};
+
+exports.updateSubAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    // Validate ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid subadmin ID' });
+    }
+
+    // Check if subadmin exists
+    const subAdmin = await User.findById(id);
+    if (!subAdmin || subAdmin.role !== 's-admin') {
+      return res.status(404).json({ success: false, message: 'Subadmin not found' });
+    }
+
+    // Check for duplicate email/phone if being updated
+    const orConditions = [];
+    if (updates.email) orConditions.push({ email: updates.email });
+    if (updates.phone) orConditions.push({ phone: updates.phone });
+
+    if (orConditions.length > 0) {
+      const existingUser = await User.findOne({
+        _id: { $ne: id }, // Exclude current subadmin
+        $or: orConditions
+      });
+
+      if (existingUser) {
+        return res.status(409).json({ 
+          success: false,
+          message: 'Email or phone already in use by another user' 
+        });
+      }
+    }
+
+    // Hash password if provided
+    if (updates.password) {
+      updates.password = await bcrypt.hash(updates.password, 10);
+    } else {
+      delete updates.password; // Remove if empty
+    }
+
+    // Perform update
+    const updatedSubAdmin = await User.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    ).select('-password -__v');
+
+    res.status(200).json({
+      success: true,
+      message: 'Subadmin updated successfully',
+      data: updatedSubAdmin
+    });
+  } catch (err) {
+    console.error('Update subadmin error:', err);
+    if (err.name === 'ValidationError') {
+      const messages = Object.values(err.errors).map(val => val.message);
+      return res.status(400).json({ 
+        success: false,
+        message: messages.join(', ') 
+      });
+    }
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while updating subadmin' 
+    });
+  }
+};
+
+
+exports.deleteSubAdmin = async (req, res) => {
+  try {
+    const { adminId , id } = req.params;
+
+    // Validate ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid subadmin ID' 
+      });
+    }
+
+    // Check if subadmin exists
+    const subAdmin = await User.findOne({ 
+      _id: id,
+      role: 's-admin' 
+    });
+
+    if (!subAdmin) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Subadmin not found' 
+      });
+    }
+
+     if (!mongoose.Types.ObjectId.isValid(adminId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid Admin ID' 
+      });
+    }
+    // Verify the requesting user is a super admin
+    if (!adminId) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Unauthorized: Only super admins can delete subadmins' 
+      });
+    }
+
+    // Perform deletion
+    await User.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Subadmin deleted successfully',
+      data: {
+        id: id,
+        deletedAt: new Date()
+      }
+    });
+
+  } catch (error) {
+    console.error('Delete subadmin error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while deleting subadmin' 
+    });
+  }
+};
+
 
 exports.register = async (req, res) => {
   const { error } = registerValidation(req.body);
   if (error) return res.status(400).json({ message: error.details[0].message });
 
   try {
-    const { full_name, email, phone, password, role } = req.body;
+    const { full_name, email, phone, password, role, status } = req.body;
 
     const existingUser = await User.findOne({ $or: [{ email }, { phone }] });
     if (existingUser) {
-      return res.status(409).json({ message: 'User already exists with email or phone.' });
+      return res
+        .status(409)
+        .json({ message: "User already exists with email or phone." });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -27,10 +220,11 @@ exports.register = async (req, res) => {
       phone,
       password: hashedPassword,
       role,
+      status: status || "Active",
     });
 
     res.status(201).json({
-      message: 'User registered successfully',
+      message: "User registered successfully",
       token: generateToken(user._id),
       user: {
         name: user.name,
@@ -40,7 +234,7 @@ exports.register = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -55,31 +249,32 @@ exports.login = async (req, res) => {
       $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
     });
 
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (user.status !== 'Active') {
+    if (user.status !== "Active") {
       return res.status(403).json({
-        message: 'Your account has been deactivated. Please contact your administrator for assistance.',
+        message:
+          "Your account has been deactivated. Please contact your administrator for assistance.",
       });
-      
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!isMatch)
+      return res.status(401).json({ message: "Invalid credentials" });
 
     res.status(200).json({
-      message: 'Login successful',
-      token: generateToken(user._id,user.role),
+      message: "Login successful",
+      token: generateToken(user._id, user.role),
       user: {
         name: user.name,
         email: user.email,
         phone: user.phone,
         role: user.role,
-        id: user._id
+        id: user._id,
       },
     });
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -90,22 +285,26 @@ exports.updatePassword = async (req, res) => {
 
     // Basic validation
     if (!candidateId) {
-      return res.status(400).json({ message: 'Candidate ID is required' });
+      return res.status(400).json({ message: "Candidate ID is required" });
     }
     if (!newPassword || !confirmNewPassword) {
-      return res.status(400).json({ message: 'New password and confirm password are required' });
+      return res
+        .status(400)
+        .json({ message: "New password and confirm password are required" });
     }
     if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+      return res
+        .status(400)
+        .json({ message: "New password must be at least 6 characters" });
     }
     if (newPassword !== confirmNewPassword) {
-      return res.status(400).json({ message: 'Passwords do not match' });
+      return res.status(400).json({ message: "Passwords do not match" });
     }
 
     // Find user by candidateId
     const user = await User.findById(candidateId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
     // Hash new password
@@ -113,23 +312,23 @@ exports.updatePassword = async (req, res) => {
     user.password = hashedPassword;
     await user.save();
 
-    res.status(200).json({ message: 'Password updated successfully' });
+    res.status(200).json({ message: "Password updated successfully" });
   } catch (err) {
-    console.error('Error updating password:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error updating password:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
 exports.logout = async (req, res) => {
   // You can handle token blacklist here if needed
-  res.status(200).json({ message: 'Logout successful' });
+  res.status(200).json({ message: "Logout successful" });
 };
 
-exports.addBulkCandidate = async (req,res) => {
+exports.addBulkCandidate = async (req, res) => {
   try {
     const candidates = req.body.candidates;
     if (!candidates || !Array.isArray(candidates)) {
-      return res.status(400).json({ message: 'Invalid data format' });
+      return res.status(400).json({ message: "Invalid data format" });
     }
 
     const savedCandidates = [];
@@ -138,7 +337,7 @@ exports.addBulkCandidate = async (req,res) => {
     for (const candidateData of candidates) {
       try {
         // Check required fields
-        const requiredFields = ['full_name', 'email', 'phone', 'password'];
+        const requiredFields = ["full_name", "email", "phone", "password"];
         for (const field of requiredFields) {
           if (!candidateData[field]) {
             throw new Error(`Missing required field: ${field}`);
@@ -150,7 +349,7 @@ exports.addBulkCandidate = async (req,res) => {
           $or: [{ email: candidateData.email }, { phone: candidateData.phone }],
         });
         if (existingUser) {
-          throw new Error('User already exists with email or phone');
+          throw new Error("User already exists with email or phone");
         }
 
         // Prepare candidate data
@@ -159,12 +358,12 @@ exports.addBulkCandidate = async (req,res) => {
           email: candidateData.email,
           phone: candidateData.phone,
           password: await bcrypt.hash(candidateData.password, 10),
-          role: 'candidate', // Default role
+          role: "candidate", // Default role
           dob: candidateData.dob ? new Date(candidateData.dob) : undefined,
           gender: candidateData.gender || undefined,
           city: candidateData.city || undefined,
           state: candidateData.state || undefined,
-          status: candidateData.status || 'Active',
+          status: candidateData.status || "Active",
         };
 
         // Save candidate to database
@@ -172,20 +371,22 @@ exports.addBulkCandidate = async (req,res) => {
         await newCandidate.save();
         savedCandidates.push(newCandidate);
       } catch (error) {
-        errors.push({ candidate: candidateData.full_name || 'Unknown', error: error.message });
+        errors.push({
+          candidate: candidateData.full_name || "Unknown",
+          error: error.message,
+        });
       }
     }
 
     res.status(200).json({
-      message: 'Bulk upload processed',
+      message: "Bulk upload processed",
       saved: savedCandidates.length,
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Server error' });
+    res.status(500).json({ message: error.message || "Server error" });
   }
-}
-
+};
 
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
@@ -193,7 +394,9 @@ exports.forgotPassword = async (req, res) => {
   try {
     const user = await User.findOne({ email });
     if (!user)
-      return res.status(404).json({ message: "User with that email not found." });
+      return res
+        .status(404)
+        .json({ message: "User with that email not found." });
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
@@ -498,13 +701,14 @@ exports.forgotPassword = async (req, res) => {
       `,
     });
 
-    res.status(200).json({ message: "Password reset link sent to your email." });
+    res
+      .status(200)
+      .json({ message: "Password reset link sent to your email." });
   } catch (error) {
     console.error("Forgot password error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 exports.resetPassword = async (req, res) => {
   const { token } = req.query;

@@ -1,6 +1,6 @@
 const express = require('express');
   const router = express.Router();
-  const { signupEmployer, loginEmployer, getAllEmployers, updateEmployerStatus, getEmployerById, getEmployerStats, getApplicationTrends, getRecentApplicants, updateJobApplicationStatus, bulkSignupEmployers, getJobsByEmployer, getJobFiltersByEmployer, updateJobStatus, updateEmployerPassword, updateEmployer } = require('../controllers/employerController');
+  const { signupEmployer, loginEmployer, getAllEmployers, updateEmployerStatus, getEmployerById, getEmployerStats, getApplicationTrends, getRecentApplicants, getJobApplications, updateJobApplicationStatus, bulkSignupEmployers, getJobsByEmployer, getJobFiltersByEmployer, updateJobStatus, updateEmployerPassword, updateEmployer } = require('../controllers/employerController');
 const restrictTo = require('../middlewares/restrictTo');
 
   router.post('/signup', signupEmployer);
@@ -11,6 +11,7 @@ const restrictTo = require('../middlewares/restrictTo');
   router.get('/dashboard-stats/:id', getEmployerStats)
   router.get('/dashboard-applications-trends/:id', getApplicationTrends)
   router.get('/dashboard/applicants/:id', getRecentApplicants)
+  router.get('/dashboard/job-applicants/:jobId',getJobApplications)
   router.patch('/update/job-app/status/:id', updateJobApplicationStatus)
   router.post('/bulk-signup', bulkSignupEmployers)
   router.get('/get-jobs-by-employer/:id', getJobsByEmployer)
