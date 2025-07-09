@@ -613,6 +613,98 @@ const getRecentApplicants = async (req, res) => {
   }
 };
 
+const getJobApplications = async (req, res) => {
+  try {
+    const jobId = req.params.jobId;
+
+    // Validate job ID
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Invalid job ID",
+      });
+    }
+
+    // Check if job exists
+    const job = await Job.findById(jobId);
+    if (!job) {
+      return res.status(404).json({
+        status: "fail",
+        message: "Job not found",
+      });
+    }
+
+    // Get ALL applications without pagination
+    const applications = await JobApplied.aggregate([
+      {
+        $match: { jobId: new mongoose.Types.ObjectId(jobId) }
+      },
+      {
+        $lookup: {
+          from: "candidates",
+          localField: "candidateId",
+          foreignField: "_id",
+          as: "candidate",
+        },
+      },
+      {
+        $unwind: "$candidate",
+      },
+      {
+        $project: {
+          id: "$_id",
+          applicantId: "$candidateId",
+          name: "$candidate.full_name",
+          phone: "$candidate.phone",
+          email: "$candidate.email",
+          position: job.title,
+          experience: "$candidate.totalExperience",
+          skills: "$candidate.skills",
+          resumeUrl: "$candidate.resumeUrl",
+          applied: "$createdAt",
+          status: "$status",
+        },
+      },
+      {
+        $sort: { applied: -1 }, // Most recent first
+      }
+    ]);
+
+    // Format applied dates
+    const now = new Date();
+    const formattedApplications = applications.map(app => {
+      const appliedDate = new Date(app.applied);
+      const diffDays = Math.floor((now - appliedDate) / (1000 * 60 * 60 * 24));
+      
+      let appliedText;
+      if (diffDays === 0) appliedText = "Today";
+      else if (diffDays === 1) appliedText = "Yesterday";
+      else if (diffDays <= 7) appliedText = `${diffDays} days ago`;
+      else appliedText = appliedDate.toLocaleDateString();
+
+      return {
+        ...app,
+        applied: appliedText,
+      };
+    });
+
+    res.status(200).json({
+      status: "success",
+      message: "All job applications retrieved successfully",
+      jobTitle: job.title,
+      applications: formattedApplications,
+      totalApplications: applications.length,
+    });
+  } catch (error) {
+    console.error("Error fetching job applications:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Failed to fetch job applications",
+      error: error.message,
+    });
+  }
+};
+
 const updateJobApplicationStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1150,5 +1242,6 @@ module.exports = {
   getJobFiltersByEmployer,
   updateJobStatus,
   updateEmployer,
-  updateEmployerPassword
+  updateEmployerPassword,
+  getJobApplications
 };
